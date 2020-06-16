@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { get } from 'lodash';
 import { GeoJSONLayer } from 'react-mapbox-gl';
@@ -6,7 +6,10 @@ import * as MapboxGL from 'mapbox-gl';
 import { showPopup } from '../../../../context/tooltipStateSlice';
 import { BoundaryLayerProps } from '../../../../config/types';
 import { layerDataSelector } from '../../../../context/mapStateSlice';
-import { LayerData } from '../../../../context/layers/layer-data';
+import {
+  LayerData,
+  loadLayerData,
+} from '../../../../context/layers/layer-data';
 
 /**
  * To activate fillOnClick option, we "fill in"
@@ -37,8 +40,16 @@ function BoundaryLayer({ layer }: { layer: BoundaryLayerProps }) {
     | LayerData<BoundaryLayerProps>
     | undefined;
   const { data } = boundaryLayer || {};
+
+  useEffect(() => {
+    // not used currently but in the future if more boundary layers can exist, this will help load them.
+    if (!data) {
+      dispatch(loadLayerData({ layer }));
+    }
+  }, [dispatch, layer, data]);
+
   if (!data) {
-    return null; // boundary layer hasn't loaded yet. We load it on init inside MapView. We can't load it here since its a dependency of other layers.
+    return null;
   }
   return (
     <GeoJSONLayer

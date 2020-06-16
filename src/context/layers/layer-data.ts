@@ -1,5 +1,9 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { DiscriminateUnion, LayerType } from '../../config/types';
+import {
+  CommonLayerProps,
+  DiscriminateUnion,
+  LayerType,
+} from '../../config/types';
 import { Extent } from '../../components/MapView/Layers/raster-utils';
 import { CreateAsyncThunkTypes, ThunkApi } from '../store';
 import { fetchNsoLayerData, NSOLayerData } from './nso';
@@ -64,27 +68,64 @@ type LazyLoader = (
   api: ThunkApi,
 ) => Promise<LayerSpecificDataTypes[keyof LayerSpecificDataTypes]>;
 
+const lazyLoaderPromiseState: {
+  // used to store the current loading state of the lazyLoad promises
+  [k in CommonLayerProps['id']]: 'pending' | 'fulfilled' | 'rejected';
+} = {};
+
 export const loadLayerData = createAsyncThunk<
   LayerDataTypes,
   ParamTypes,
   CreateAsyncThunkTypes
->('mapState/loadLayerData', async (params, thunkApi) => {
-  const { layer, extent, date } = params;
-  const layerLoaders: LayerLoaders = {
-    boundary: fetchBoundaryLayerData,
-    impact: fetchImpactLayerData,
-    wms: fetchWMSLayerData,
-    nso: fetchNsoLayerData,
-    groundstation: fetchGroundstationData,
-  };
-  const lazyLoad: LazyLoader = layerLoaders[layer.type];
-  const layerData = await lazyLoad(params, thunkApi);
-  // Need to cast this since TS isn't smart enough to match layer & layerData types based on the nested discrimator
-  // field `layer.type`.
-  return {
-    layer,
-    extent,
-    date,
-    data: layerData,
-  } as LayerDataTypes;
-});
+>(
+  'mapState/loadLayerData',
+  async (params, thunkApi) => {
+    const { layer, extent, date } = params;
+    const layerLoaders: LayerLoaders = {
+      boundary: fetchBoundaryLayerData,
+      impact: fetchImpactLayerData,
+      wms: fetchWMSLayerData,
+      nso: fetchNsoLayerData,
+      groundstation: fetchGroundstationData,
+    };
+    const lazyLoad: LazyLoader = layerLoaders[layer.type];
+
+    // we are probing the promise here since there's no method to know whether its finished or not.
+    lazyLoaderPromiseState[layer.id] = 'pending';
+    const layerData = await lazyLoad(params, thunkApi)
+      .then(res => {
+        lazyLoaderPromiseState[layer.id] = 'fulfilled';
+        return res;
+      })
+      .catch(err => {
+        lazyLoaderPromiseState[layer.id] = 'rejected';
+        throw err;
+      });
+
+    // Need to cast this since TS isn't smart enough to match layer & layerData types based on the nested discrimator
+    // field `layer.type`.
+    return {
+      layer,
+      extent,
+      date,
+      data: layerData,
+    } as LayerDataTypes;
+  },
+  {
+    condition: params => {
+      // our goal here is to prevent loading any layer data unnecessarily.
+      const { id } = params.layer;
+      const promiseStatus = lazyLoaderPromiseState[id];
+      switch (promiseStatus) {
+        case 'pending':
+        case 'fulfilled':
+          // if we already loaded the data 'fulfilled', or it is currently loading 'pending', don't try loading again.
+          console.log(promiseStatus);
+          return false;
+        default:
+          // if the last load attempt failed 'rejected', or we haven't tried loading this data at all, lets give it a shot.
+          return true;
+      }
+    },
+  },
+);
