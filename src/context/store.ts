@@ -27,7 +27,7 @@ export const store = configureStore({
   middleware: getDefaultMiddleware({
     serializableCheck: false,
     immutableCheck: {
-      ignoredPaths: ['mapState.layersData'],
+      ignoredPaths: ['mapState.layersData', 'serverState.availableDates'],
     },
   }).concat(errorToNotificationMiddleware),
 });

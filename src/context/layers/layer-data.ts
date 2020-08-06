@@ -1,6 +1,6 @@
 import { createAsyncThunk, AsyncThunk } from '@reduxjs/toolkit';
 import { DiscriminateUnion, LayerType } from '../../config/types';
-import { Extent } from '../../components/MapView/Layers/raster-utils';
+import type { Extent } from '../../components/MapView/Layers/raster-utils';
 
 import { fetchWCSLayerData, WMSLayerData } from './wms';
 import {

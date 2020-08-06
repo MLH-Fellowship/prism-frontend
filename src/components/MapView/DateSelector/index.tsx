@@ -64,7 +64,13 @@ function DateSelector({ availableDates = [], classes }: DateSelectorProps) {
   }
 
   function updateStartDate(date: Date) {
-    const time = date.getTime();
+    // to make things more predictable, making sure the date output is always in midnight UTC helps here.
+    const time = moment(date)
+      .utc()
+      .set('hour', 0)
+      .set('minute', 0)
+      .set('second', 0)
+      .valueOf();
     dispatch(updateDateRange({ startDate: time, endDate: time }));
   }
 

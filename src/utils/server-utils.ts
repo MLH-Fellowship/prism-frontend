@@ -1,10 +1,15 @@
 import moment from 'moment';
 import { xml2js } from 'xml-js';
 import { get, isEmpty, isString, merge, union } from 'lodash';
+import GeoJSON from 'geojson';
 import config from '../config/prism.json';
 import { LayerDefinitions } from '../config/utils';
+import { addSeveralLayerData } from '../context/mapStateSlice';
 import type { AvailableDates, GroundstationLayerProps } from '../config/types';
 import type { GroundstationLayerData } from '../context/layers/groundstation';
+import type { ThunkApi } from '../context/store';
+import { formatUrl } from '../components/MapView/Layers/raster-utils';
+import { LayerData } from '../context/layers/layer-data';
 
 // Note: PRISM's date picker only works with dates where their time is midnight in the UTC timezone (possible dates passed in should be 2020-xx-xx 00:00 Midnight in UTC    -    2020-xx-xx 10:00 in Australia East Coast)
 // Therefore, ambiguous dates (dates passed as string e.g 2020-08-01) shouldn't be calculated from the user's timezone and instead be converted directly to UTC. Possibly with moment.utc(string)
@@ -15,15 +20,6 @@ const xml2jsOptions = {
   trim: true,
   ignoreComment: true,
 };
-
-export function formatUrl(
-  baseUrl: string,
-  params: { [key: string]: any } = {},
-): string {
-  const url = new URL(baseUrl);
-  Object.keys(params).forEach(k => url.searchParams.append(k, params[k]));
-  return url.toString();
-}
 
 /**
  * Format the raw data to { [layerId]: availableDates }
@@ -157,7 +153,10 @@ async function getWCSCoverage(serverUri: string) {
  * TODO Once the api is fixed this needs to be fixed as its currently a hacky solution to get around the api's caveats
  *
  */
-async function getGroundstationCoverage(layer: GroundstationLayerProps) {
+async function getGroundstationCoverage(
+  layer: GroundstationLayerProps,
+  { dispatch }: ThunkApi,
+) {
   const { data: url, fallbackData: fallbackUrl, id } = layer;
   const loadGroundstationDataFromURL = async (fetchUrl: string) => {
     const data = (await (
@@ -184,10 +183,19 @@ async function getGroundstationCoverage(layer: GroundstationLayerProps) {
     }); // filter() here removes duplicate dates because indexOf will always return the first occurrence of an item
 
   // this is exclusive to this specific API, we need to fetch all groundstation data to just get the dates. To optimise, why not store it?
-  /* possibleDates.forEach(date => {
+  // We assume here the data doesn't exist in Redux in the first place, since this code is run very early.
+  const preloadedLayerData: LayerData<
+    GroundstationLayerProps
+  >[] = possibleDates.map(date => {
     const pointsThatMatchDate = data.filter(item => item.date === date);
-    // TODO make cache
-  }); */
+    return {
+      layer,
+      date,
+      data: GeoJSON.parse(pointsThatMatchDate, { Point: ['lat', 'lon'] }),
+    };
+  });
+  dispatch(addSeveralLayerData(preloadedLayerData));
+
   return possibleDates;
 }
 
@@ -197,7 +205,7 @@ async function getGroundstationCoverage(layer: GroundstationLayerProps) {
  * We also now load possible dates for groundstation layers
  * @return a Promise of Map<layerId, availableDate[]>
  */
-export async function getLayersAvailableDates() {
+export async function getLayersAvailableDates(api: ThunkApi) {
   // https://mng.prism.services/temp/Temperature?beginDateTime=2020-05-01&endDateTime=2020-05-01
   const wmsServerUrls: string[] = get(config, 'serversUrls.wms', []);
   const wcsServerUrls: string[] = get(config, 'serversUrls.wcs', []);
@@ -210,7 +218,7 @@ export async function getLayersAvailableDates() {
     ...wmsServerUrls.map(url => getWMSCapabilities(url)),
     ...wcsServerUrls.map(url => getWCSCoverage(url)),
     ...groundstationLayers.map(async layer => ({
-      [layer.id]: await getGroundstationCoverage(layer),
+      [layer.id]: await getGroundstationCoverage(layer, api),
     })),
   ]);
 

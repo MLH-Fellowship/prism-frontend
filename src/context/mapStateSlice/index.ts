@@ -63,6 +63,11 @@ export const mapStateSlice = createSlice({
       ...state,
       mapboxMap: payload,
     }),
+    // Designed to be used as a way to add pre-processed data into the slice. Requesting for data should be done with loadLayerData
+    addSeveralLayerData: (
+      { layersData, ...rest },
+      { payload }: PayloadAction<LayerDataTypes[]>,
+    ) => ({ ...rest, layersData: layersData.concat(payload) }),
 
     dismissError: (
       { errors, ...rest },
@@ -109,6 +114,7 @@ export const {
   removeLayer,
   updateDateRange,
   setMap,
+  addSeveralLayerData,
 } = mapStateSlice.actions;
 
 export default mapStateSlice.reducer;

@@ -3,7 +3,6 @@ import bbox from '@turf/bbox';
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
 import * as GeoTIFF from 'geotiff';
 import { buffer } from 'd3-fetch';
-import { formatUrl } from '../../../utils/server-utils';
 
 export type TransformMatrix = [number, number, number, number, number, number];
 export type TypedArray =
@@ -67,6 +66,14 @@ function numberOfTiles(
 ) {
   const range = max - min;
   return Math.ceil((range * resolution) / pixelsPerTile);
+}
+export function formatUrl(
+  baseUrl: string,
+  params: { [key: string]: any } = {},
+): string {
+  const url = new URL(baseUrl);
+  Object.keys(params).forEach(k => url.searchParams.append(k, params[k]));
+  return url.toString();
 }
 
 export function getWMSUrl(
